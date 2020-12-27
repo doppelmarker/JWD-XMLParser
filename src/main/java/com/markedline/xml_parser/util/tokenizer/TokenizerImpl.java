@@ -13,10 +13,10 @@ public final class TokenizerImpl implements Tokenizer {
     private int tokenType = BOF;
     private String tagName;
     private String text;
-    private boolean haveEndTag;
+    private boolean hasEndTag;
 
-    public TokenizerImpl(InputStream _input) {
-        this.input = new BufferedReader(new InputStreamReader(_input));
+    public TokenizerImpl(InputStream input) {
+        this.input = new BufferedReader(new InputStreamReader(input));
         this.attributes = new ArrayList<>();
     }
 
@@ -31,31 +31,31 @@ public final class TokenizerImpl implements Tokenizer {
 
     @Override
     public int nextToken() throws IOException, XMLException {
-        if (this.tokenType == 0) {
+        if (this.tokenType == BOF) {
             this.parseText();
         }
 
         switch (this.tokenType) {
-            case 1:
-            case 2:
-                //Если тег является одиночным
-                if (this.haveEndTag) {
+            case START_TAG:
+            case END_TAG:
+                if (this.hasEndTag) {
                     this.resetState(false);
-                    this.tokenType = 2;
-                    this.haveEndTag = false;
+                    this.tokenType = END_TAG;
+                    this.hasEndTag = false;
                 } else {
                     this.resetState(true);
                     this.parseText();
-                    if (this.tokenType == 3 && this.text.equals("")) {
+                    if (this.tokenType == TEXT && this.text.equals("")) {
                         this.resetState(true);
                         this.parseTag();
                     }
                 }
                 break;
-            case 3:
+            case TEXT:
                 this.resetState(true);
                 this.parseTag();
-            case 4:
+                break;
+            case EOF:
                 break;
             default:
                 throw new IllegalStateException();
@@ -142,11 +142,11 @@ public final class TokenizerImpl implements Tokenizer {
             throw new XMLException(INVALID_TAG);
         } else {
             if (isStartTag) {
-                this.tokenType = 1;
+                this.tokenType = START_TAG;
                 switch (c) {
                     case '/':
                         this.match('>', false);
-                        this.haveEndTag = true;
+                        this.hasEndTag = true;
                     case '>':
                         break;
                     default:
@@ -154,10 +154,10 @@ public final class TokenizerImpl implements Tokenizer {
                             throw new XMLException(INVALID_TAG);
                         }
 
-                        this.haveEndTag = this.parseAttrs();
+                        this.hasEndTag = this.parseAttrs();
                 }
             } else {
-                this.tokenType = 2;
+                this.tokenType = END_TAG;
                 switch (c) {
                     case '>':
                         break;

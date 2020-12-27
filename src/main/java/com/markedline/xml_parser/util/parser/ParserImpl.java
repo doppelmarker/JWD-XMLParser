@@ -11,7 +11,7 @@ import java.util.Stack;
 
 import static com.markedline.xml_parser.util.tokenizer.Tokenizer.*;
 
-public class ParserImpl implements Parser {
+public final class ParserImpl implements Parser {
     @Override
     public Element parse(InputStream input) throws IOException, XMLException {
 

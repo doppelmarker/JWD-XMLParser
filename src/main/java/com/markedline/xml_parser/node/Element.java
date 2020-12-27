@@ -113,16 +113,23 @@ public final class Element {
         else throw new NoSuchElementException();
     }
 
-    public Element getNextSibling() {
-        if (this.parent != null) {
-            Element parent = this.getParent();
-            int currentIdx = parent.getChildren().indexOf(this);
-            if (++currentIdx - 1 < parent.getChildren().size())
-                return parent.getChild(currentIdx);
-            else
-                return null;
-        } else throw new NoSuchElementException();
+    public int getDepth() {
+        if (this.parent == null)
+            return 0;
+        else
+            return 1 + parent.getDepth();
     }
+
+    //    public Element getNextSibling() {
+//        if (this.parent != null) {
+//            Element parent = this.getParent();
+//            int currentIdx = parent.getChildren().indexOf(this);
+//            if (++currentIdx - 1 < parent.getChildren().size())
+//                return parent.getChild(currentIdx);
+//            else
+//                throw new NoSuchElementException();
+//        } else throw new NoSuchElementException();
+//    }
 //
 //    public Node getPreviousSibling() {
 //        return null;

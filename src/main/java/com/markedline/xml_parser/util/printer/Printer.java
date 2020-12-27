@@ -4,5 +4,5 @@ import com.markedline.xml_parser.node.Element;
 
 public interface Printer {
 
-    void print(Element element, int i);
+    void print(Element element);
 }

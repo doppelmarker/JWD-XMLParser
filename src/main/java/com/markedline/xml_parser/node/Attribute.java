@@ -2,7 +2,7 @@ package com.markedline.xml_parser.node;
 
 import java.util.Objects;
 
-public class Attribute {
+public final class Attribute {
 
     private String name;
     private String value;

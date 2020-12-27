@@ -14,10 +14,8 @@ public class Application {
         Parser parser = ParserFactory.createParser();
 
         Element root = parser.parse(new FileInputStream("doc.xml"));
-        //System.out.println(root);
-        Element childIdx0 = root.getChild(0);
 
         Printer printer = new PrinterImpl();
-        printer.print(root, 0);
+        printer.print(root);
     }
 }
