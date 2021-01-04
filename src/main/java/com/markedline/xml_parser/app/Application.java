@@ -13,7 +13,7 @@ public class Application {
     public static void main(String[] args) throws Exception {
         Parser parser = ParserFactory.createParser();
 
-        Element root = parser.parse(new FileInputStream("doc.xml"));
+        Element root = parser.parse(new FileInputStream("document.xml"));
 
         Printer printer = new PrinterImpl();
         printer.print(root);

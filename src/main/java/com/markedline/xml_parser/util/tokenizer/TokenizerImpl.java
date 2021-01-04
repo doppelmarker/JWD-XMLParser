@@ -3,49 +3,46 @@ package com.markedline.xml_parser.util.tokenizer;
 import com.markedline.xml_parser.node.Attribute;
 import com.markedline.xml_parser.node.Element;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.List;
 
 public final class TokenizerImpl implements Tokenizer {
-    private final Reader input;
+    private final BufferedReader reader;
     private final List<Attribute> attributes;
-    private int tokenType = BOF;
+    private TokenType tokenType = TokenType.BOF;
     private String tagName;
     private String text;
     private boolean hasEndTag;
 
-    public TokenizerImpl(InputStream input) {
-        this.input = new BufferedReader(new InputStreamReader(input));
+    public TokenizerImpl(FileInputStream reader) {
+        this.reader = new BufferedReader(new InputStreamReader(reader));
         this.attributes = new ArrayList<>();
     }
 
-    private void resetState(boolean resetTagName) {
-        if (resetTagName) {
-            this.tagName = null;
-        }
-
-        this.attributes.clear();
-        this.text = null;
-    }
-
     @Override
-    public int nextToken() throws IOException, XMLException {
-        if (this.tokenType == BOF) {
+    public TokenType nextToken() throws IOException, XMLException {
+        // skip leading whitespaces and newline characters
+        if (this.tokenType == TokenType.BOF) {
             this.parseText();
         }
 
         switch (this.tokenType) {
-            case START_TAG:
-            case END_TAG:
+            case START_TAG, END_TAG:
+                // if symbol '/' is present in tag
                 if (this.hasEndTag) {
                     this.resetState(false);
-                    this.tokenType = END_TAG;
+                    this.tokenType = TokenType.END_TAG;
                     this.hasEndTag = false;
                 } else {
                     this.resetState(true);
                     this.parseText();
-                    if (this.tokenType == TEXT && this.text.equals("")) {
+                    // if tags are going in a row, this will let us skip adding a child with empty text:
+                    // <people><person /></people>
+                    if (this.tokenType == TokenType.TEXT && this.text.equals("")) {
                         this.resetState(true);
                         this.parseTag();
                     }
@@ -77,54 +74,38 @@ public final class TokenizerImpl implements Tokenizer {
         };
     }
 
-    public int getTokenType() {
+    @Override
+    public TokenType getTokenType() {
         return this.tokenType;
     }
 
-    private int readOptionalChar(boolean skipWS) throws IOException {
-        while (true) {
-            int n = this.input.read();
-            if (n >= 0) {
-                char c = (char) n;
-                if (skipWS && Character.isWhitespace(c)) {
-                    continue;
-                }
-            }
-
-            return n;
+    private void resetState(boolean resetTagName) {
+        if (resetTagName) {
+            this.tagName = null;
         }
+        this.attributes.clear();
+        this.text = null;
     }
 
-    private int readOptionalChar() throws IOException {
-        return this.readOptionalChar(false);
-    }
+    private void parseText() throws IOException {
+        StringBuilder data = new StringBuilder();
 
-    private char readChar(boolean skipWS) throws IOException, XMLException {
-        int n = this.readOptionalChar(skipWS);
-        if (n < 0) {
-            throw new XMLException("unexpected end of document");
+        int n;
+        for (n = this.readIntegerChar(false); n != -1 && (char) n != '<'; n = this.readIntegerChar(false)) {
+            data.append((char) n);
+        }
+
+        if (n != -1) {
+            this.tokenType = TokenType.TEXT;
+            this.text = data.toString();
         } else {
-            return (char) n;
+            this.tokenType = TokenType.EOF;
         }
-    }
-
-    private char readChar() throws IOException, XMLException {
-        return this.readChar(false);
-    }
-
-    private void match(char expected, boolean skipWS) throws IOException, XMLException {
-        char c = this.readChar(skipWS);
-        if (c != expected) {
-            throw new XMLException("unexpected character: expected [" + expected + "], got [" + c + "]");
-        }
-    }
-
-    private void match(char expected) throws IOException, XMLException {
-        this.match(expected, false);
     }
 
     private void parseTag() throws IOException, XMLException {
         boolean isStartTag = true;
+
         char c = this.readChar();
         if (c == '/') {
             isStartTag = false;
@@ -142,31 +123,36 @@ public final class TokenizerImpl implements Tokenizer {
             throw new XMLException(INVALID_TAG);
         } else {
             if (isStartTag) {
-                this.tokenType = START_TAG;
+                this.tokenType = TokenType.START_TAG;
                 switch (c) {
-                    case '/':
-                        this.match('>', false);
-                        this.hasEndTag = true;
+                    // end parsing tag after reaching '>' symbol
                     case '>':
                         break;
+                    // in a single opening tag the next symbol after '/' must be '>': <person />
+                    case '/':
+                        this.matchNextSymbol('>', false);
+                        this.hasEndTag = true;
                     default:
+                        // presence of any character except whitespace after tag name is incorrect: <person@id="1">
                         if (!Character.isWhitespace(c)) {
                             throw new XMLException(INVALID_TAG);
                         }
-
+                        // parse attributes if tag is correct: <person id="1"> or <person    id="1">
                         this.hasEndTag = this.parseAttrs();
                 }
             } else {
-                this.tokenType = END_TAG;
+                this.tokenType = TokenType.END_TAG;
                 switch (c) {
+                    // end parsing tag after reaching '>' symbol
                     case '>':
                         break;
                     default:
+                        // presence of any character except whitespace after tag name is incorrect: </person@>
                         if (!Character.isWhitespace(c)) {
                             throw new XMLException(INVALID_TAG);
                         }
-
-                        this.match('>', true);
+                        // this checks if '>' is going after possible multiple whitespaces in a closing tag: </person       >
+                        this.matchNextSymbol('>', true);
                 }
             }
 
@@ -174,45 +160,54 @@ public final class TokenizerImpl implements Tokenizer {
     }
 
     private boolean parseAttrs() throws IOException, XMLException {
-        String INVALID_TAG = "invalid tag: <" + this.tagName + ">";
+        // skip whitespaces and read the first symbol of the name of the first attribute: <person   id="1"> -> 'i'
         char c = this.readChar(true);
 
         while (c != '>') {
             if (c == '/') {
-                this.match('>', false);
+                // in a single opening tag the next symbol after '/' must be '>': <person id="1" />
+                this.matchNextSymbol('>', false);
                 return true;
             }
 
             StringBuilder attrName;
-            for (attrName = new StringBuilder(); Character.isLetterOrDigit(c); c = this.readChar(false)) {
+
+            // read attribute name
+            for (attrName = new StringBuilder(); Character.isLetterOrDigit(c); c = this.readChar()) {
                 attrName.append(c);
             }
 
             if (attrName.length() == 0) {
-                throw new XMLException(INVALID_TAG);
+                throw new XMLException("empty attribute name in tag: <" + this.tagName + ">");
             }
 
-            String INVALID_ATTR = "invalid attribute: <" + this.tagName + ">, " + attrName;
+            // there may be only whitespaces after tag name, we read and skip them:
+            // <person id   ="1"> - ok, <person id@="1"> - not ok
             if (Character.isWhitespace(c)) {
                 c = this.readChar(true);
             }
 
             if (c != '=') {
-                throw new XMLException(INVALID_ATTR);
+                throw new XMLException("invalid attribute");
             }
 
-            StringBuilder attrValue = new StringBuilder();
+            // read the delimiter symbol: ' or "
             c = this.readChar(true);
             if (c != '\'' && c != '"') {
-                throw new XMLException(INVALID_ATTR);
+                throw new XMLException("invalid attribute");
             }
 
             char delimiter = c;
 
-            for (c = this.readChar(false); c != delimiter; c = this.readChar(false)) {
+            StringBuilder attrValue = new StringBuilder();
+
+            // read attribute value till the second delimiter
+            for (c = this.readChar(); c != delimiter; c = this.readChar()) {
                 attrValue.append(c);
             }
 
+            // skip whitespaces and read the first symbol of the name of the next attribute or '/' if it is a single tag
+            // or just '>' symbol and exit the loop
             c = this.readChar(true);
             this.attributes.add(new Attribute(attrName.toString(), attrValue.toString()));
         }
@@ -220,20 +215,37 @@ public final class TokenizerImpl implements Tokenizer {
         return false;
     }
 
-    private void parseText() throws IOException {
-        StringBuilder data = new StringBuilder();
+    private int readIntegerChar(boolean skipWS) throws IOException {
+        while (true) {
+            int n = this.reader.read();
+            if (n >= 0) {
+                char c = (char) n;
+                if (skipWS && Character.isWhitespace(c)) {
+                    continue;
+                }
+            }
 
-        int n;
-        for (n = this.readOptionalChar(); n != -1 && (char) n != '<'; n = this.readOptionalChar()) {
-            data.append((char) n);
+            return n;
         }
+    }
 
-        if (n != -1) {
-            this.tokenType = 3;
-            this.text = data.toString();
+    private char readChar(boolean skipWS) throws IOException, XMLException {
+        int n = this.readIntegerChar(skipWS);
+        if (n < 0) {
+            throw new XMLException("unexpected end of document");
         } else {
-            this.tokenType = 4;
+            return (char) n;
         }
+    }
 
+    private char readChar() throws IOException, XMLException {
+        return this.readChar(false);
+    }
+
+    private void matchNextSymbol(char expected, boolean skipWS) throws IOException, XMLException {
+        char c = this.readChar(skipWS);
+        if (c != expected) {
+            throw new XMLException("unexpected character: expected [" + expected + "], got [" + c + "]");
+        }
     }
 }

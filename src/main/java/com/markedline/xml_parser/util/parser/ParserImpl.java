@@ -1,25 +1,24 @@
 package com.markedline.xml_parser.util.parser;
 
 import com.markedline.xml_parser.node.Element;
+import com.markedline.xml_parser.util.tokenizer.TokenType;
 import com.markedline.xml_parser.util.tokenizer.Tokenizer;
 import com.markedline.xml_parser.util.tokenizer.TokenizerImpl;
 import com.markedline.xml_parser.util.tokenizer.XMLException;
 
+import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Stack;
-
-import static com.markedline.xml_parser.util.tokenizer.Tokenizer.*;
 
 public final class ParserImpl implements Parser {
     @Override
-    public Element parse(InputStream input) throws IOException, XMLException {
+    public Element parse(FileInputStream input) throws IOException, XMLException {
 
         Tokenizer tokenizer = new TokenizerImpl(input);
 
         Stack<Element> elementStack = new Stack<>();
 
-        while (tokenizer.nextToken() != Tokenizer.EOF) {
+        while (tokenizer.nextToken() != TokenType.EOF) {
             Element element = tokenizer.getCurrentToken();
             switch (tokenizer.getTokenType()) {
                 case START_TAG -> {
@@ -40,6 +39,9 @@ public final class ParserImpl implements Parser {
             }
         }
 
-        return elementStack.pop();
+        if (!elementStack.isEmpty())
+            return elementStack.pop();
+        else
+            throw new XMLException("empty xml document");
     }
 }
