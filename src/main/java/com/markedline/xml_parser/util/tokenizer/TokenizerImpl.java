@@ -3,10 +3,7 @@ package com.markedline.xml_parser.util.tokenizer;
 import com.markedline.xml_parser.node.Attribute;
 import com.markedline.xml_parser.node.Element;
 
-import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 
